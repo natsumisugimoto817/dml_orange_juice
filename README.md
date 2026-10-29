@@ -51,7 +51,12 @@ The residuals no longer contain the effect of X, so the slope only reflects the 
 
 For both, steps 1 and 2 stay the same. Only step 3 changes: θ becomes a function of C.
 
-**Spline (DoubleML).** θ is written as a weighted sum of smooth "parts" (B-spline basis functions) of one condition, such as income. Multiplying each part by the residual price turns step 3 into an ordinary linear regression. The result is a smooth curve with a valid confidence band. It works well for one or two conditions chosen in advance.
+**Spline (DoubleML).** Estimates θ as a smooth curve along one condition, such as income.
+
+1. Turn income into a few "parts": bell-shaped curves, each covering one income range. Any smooth curve can be made as a weighted sum of these parts.
+2. Write θ as a weighted sum of the parts and put it into step 3 (residual sales = θ × residual price). Expanding the brackets gives an ordinary linear regression on "part × residual price".
+3. The fitted weights give θ for each income level, with a confidence band.
+
 
 **EBM.** An EBM is a type of GAM (Generalized Additive Model):
 
@@ -141,7 +146,28 @@ Price cuts work much better in weeks when the product is in the flyer (18% of ro
 
 - DML only removes the confounders that are in X. If stores set prices based on demand they expected but we cannot see, the estimate is still biased.
 - Store features have only 83 distinct values (one per store), so their shapes can be noisy.
-- Promotion data can overstate the effect of price: shoppers may stock up during a sale and buy less in the following weeks.
+
+## 6. Comparison with doubleml-pipeline
+
+I also ran the same data through [doubleml-pipeline](https://github.com/google/doubleml-pipeline) by Google's APAC Marketing Effectiveness team. It wraps DoubleML with AutoML and runs the whole process with one call: it picks the learners, repeats the estimation, builds confidence bands, fits the CATE, and runs a sensitivity analysis.
+
+| | My implementation | doubleml-pipeline |
+|---|---|---|
+| ATE (95% CI) | -2.90 (-3.10 to -2.70) | -2.58 (-2.90 to -2.26) |
+| Learners | LightGBM, fixed | chosen automatically (XGBoost for both) |
+| Clusters for inference | store | store and month |
+| Flyer / no flyer | -3.72 / -2.53 | -3.23 / -2.26 |
+| Large pack / others | -1.2 to -2.3 / -2.5 to -3.4 | -1.60 / -2.75 |
+| Share of working women | upward trend | upward trend |
+| Store income | weak | not significant |
+
+The direction of every result is the same. The pipeline gives a slightly smaller ATE and a wider interval, because it clusters by both store and month, and keeps the same store and month apart in cross-fitting. I had not thought about the month dimension.
+
+What I found useful:
+
+- One short script covers learner selection, repeated estimation, CATE and the sensitivity analysis.
+- The sensitivity analysis shows how strong a hidden confounder would need to be to change the result. Here the robustness value was about 40%, so the result is quite robust.
+- It chooses cluster keys and the cross-fitting design automatically, which is easy to get wrong by hand.
 
 ## How to run
 
@@ -150,3 +176,4 @@ pip install numpy pandas matplotlib scikit-learn lightgbm interpret doubleml rda
 ```
 
 Open `src/dml_orange_juice.ipynb` and run all cells. The data is downloaded from the CRAN mirror on GitHub when you run the notebook. DoubleML splits the data at random, so set `np.random.seed(0)` before `model.fit()` to get the same numbers.
+To run doubleml-pipeline, install `doubleml-pipeline` and `flaml[automl]`, then run the cell in `src/pipeline_cell.py`.

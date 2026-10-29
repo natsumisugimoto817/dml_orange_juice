@@ -160,14 +160,37 @@ EBMとスプラインは同じ右上がりの傾向を示す。スプライン�
 
 ## 限界
 
-- DMLが取り除けるのは、Xに入れた交絡のみ。
+- DMLが取り除けるのは、Xに入れた交絡のみ。-> doubleml-pipelineにて感度分析を実施
 - 店舗の特徴は83通り（店舗ごとに1つ）しか値がないので、EBMを使用した場合、そのShapeはぶれやすい
-- 販促期間のデータは、価格の効果を大きく見せることがある。セール中にまとめ買いした客は、その後の数週間あまり買わない可能性がある
+
+
+## 6. doubleml-pipelineとの比較
+
+同じデータを、GoogleのAPAC Marketing Effectivenessチームによる [doubleml-pipeline](https://github.com/google/doubleml-pipeline) にて分析。予想モデルの選択、推定の繰り返し、信頼区間、CATE、感度分析までを1回の実行で行う。
+
+| | 自分の実装 | doubleml-pipeline |
+|---|---|---|
+| ATE（95%信頼区間） | -2.90（-3.10 〜 -2.70） | -2.58（-2.90 〜 -2.26） |
+| 予想モデル | LightGBMに固定 | 自動選択（両方XGBoost） |
+| 推定のクラスタ | 店舗 | 店舗と月 |
+| チラシあり / なし | -3.72 / -2.53 | -3.23 / -2.26 |
+| 大容量 / それ以外 | -1.2 〜 -2.3 / -2.5 〜 -3.4 | -1.60 / -2.75 |
+| 働く女性の割合 | 右上がり | 右上がり |
+| 店舗の所得 | 弱い | 有意ではない |
+
+結果の方向はすべて一致。（パイプラインのATEは少し小さく、信頼区間は広い。これは、店舗と月の2方向でクラスタを取り、クロスフィッティングでも同じ店舗・同じ月を学習と予測に分けているため）
+
+便利だと感じた点：
+- 短いコードで、予想モデルの選択、推定の繰り返し、CATE、感度分析までを一度に実行でき、結果レポートとして受領できる
+- 感度分析では、見えていない交絡がどれだけ強ければ結論が変わるかを示せる
+- 今回のロバストネス値は約40%で、結論はかなり頑健である
 
 ## 実行方法
 
 ```
 pip install numpy pandas matplotlib scikit-learn lightgbm interpret doubleml rdata patsy
 ```
+Open `src/dml_orange_juice.ipynb` and run all cells. The data is downloaded from the CRAN mirror on GitHub when you run the notebook. DoubleML splits the data at random, so set `np.random.seed(0)` before `model.fit()` to get the same numbers.
+To run doubleml-pipeline, install `doubleml-pipeline` and `flaml[automl]`, then run the cell in `src/pipeline_cell.py`.
+```
 
-`src/dml_orange_juice.ipynb` を開き、すべてのセルを実行する。データはノートブックの実行時に、GitHub上のCRANミラーからダウンロードされる。
